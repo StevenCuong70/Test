@@ -1,0 +1,660 @@
+bao gồm 5 file py như sau ạ:
+
+MainStart.py:
+from tkinter import *
+from Window import *
+from Toolbox import *
+from Inspector import *
+
+if __name__=='__main__':
+    Tk().withdraw()
+
+    inspector = WidgetInspector()
+    window = WidgetWindow()
+    toolbox = WidgetToolbox(window, inspector)
+
+    window.set_toolbox(toolbox)
+    inspector.set_toolbox(toolbox)
+
+    inspector.inspect_widget(window)
+
+    print('Ururau Tkinter GUI Designer ok')
+    toolbox.mainloop()
+    
+ 
+Inspector.py:
+#!/usr/bin/python
+#-*- coding: utf-8 -*-
+
+from tkinter import *
+from tkinter import ttk
+from Window import *
+from widgets import *
+
+
+class ScrollerLabelFrame(ttk.Frame):
+    def __init__(self, master, text=''):
+        ttk.Frame.__init__(self, master)
+
+        master.columnconfigure(0, weight=1)
+        master.rowconfigure(0, weight=1)
+
+        # cria o frame externo e canvas dentro dele    
+        self.frame_outer = ttk.Frame(master)
+        self.canvas = Canvas(self.frame_outer)
+
+        # cria scrollbar no frame externo e conecta com canvas
+        self.scrollbar = Scrollbar(self.frame_outer, orient='vertical', command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # cria o frame interno rolável dentro de canvas
+        self.frame_inner = ttk.LabelFrame(self.canvas, text=text)
+        # evento <Configure> é chamado sempre que adicionamos / removemos widgets do frame interno
+        self.frame_inner.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
+
+        # exibe o frame externo, canvas e scrollbar
+        self.frame_outer.grid(sticky=(N,S,W,E))
+        self.canvas.pack(side='left', fill='both', expand=True)
+        self.scrollbar.pack(side='right', fill='y', expand=True)
+        # exibe frame_inner dentro de canvas
+        self.frame_id = self.canvas.create_window((0,0), window=self.frame_inner, anchor='nw')
+
+
+class WidgetInspector(Toplevel):
+    def __init__(self):
+        super().__init__()
+        self.resizable(True, True)
+        self.geometry('390x500+780+0')
+        self.title('Widget Inspector')
+        self.wg = ''
+        self.prop = {}
+        
+    def set_toolbox(self, toolbox):
+        self.toolbox = toolbox
+        # fechar o inspector, fecha window também
+        self.protocol('WM_DELETE_WINDOW', self.toolbox.window.close)
+
+    def set_widget_name(self, event):
+        nome = event.widget.get()
+        self.wg.nomeVar = nome
+
+    def set_widget_prop(self, event, prop):
+        entry = event.widget
+        valor = entry.get()
+        valor_old = self.wg.props_inicial[prop]
+        print(prop, valor, valor_old)
+        try:
+            self.wg[prop] = valor
+        except TclError as error:
+            entry.delete(0, END)
+            entry.insert(0, valor_old)
+            self.erro['text'] = error
+            self.erro['foreground'] = 'red'
+
+    def inspect_widget(self, wg):
+        # cria o inspector dinamicamente com widget.keys()
+        self.wg = wg
+        self.prop = self.wg.keys()
+       
+        if hasattr(self, 'main'):
+            self.main.frame_outer.destroy()
+            self.main.frame_outer.pack_forget()
+            self.frame_erro.destroy()
+            self.frame_erro.pack_forget()
+            
+        # cria frames
+        self.main = ScrollerLabelFrame(self, text=str(self.wg))
+        self.create_code_frame()
+        self.create_propertys_frame()
+        self.create_error_frame()
+        # layout
+        self.frame_code.grid(row=0, columnspan=2, sticky=EW)
+        self.frame_prop.grid(row=1, columnspan=2, sticky=EW)      
+        self.frame_erro.grid(sticky=(W,E))
+
+    def create_code_frame(self):
+        self.frame_code = ttk.LabelFrame(self.main.frame_inner, text='Código:')
+        ttk.Label(self.frame_code, text='Nome da variável', font='Helvetica 10 bold').grid(row=0, column=0, sticky=W)
+        e = ttk.Entry(self.frame_code)
+        e.bind('<FocusOut>', self.set_widget_name)
+        e.bind('<Return>', self.set_widget_name)        
+        e.grid(row=0, column=1)
+        e.insert(0, self.wg.nomeVar)
+            
+        if self.wg.widgetName == 'tk_optionMenu':
+            ttk.Label(self.frame_code, text='Valores', font='Helvetica 10 bold').grid(row=1, column=0, sticky=W)
+            v = ttk.Entry(self.frame_code)
+            v.bind('<FocusOut>', self.set_widget)
+            v.bind('<Return>', self.set_widget)        
+            v.grid(row=1, column=1)
+            v.insert(0, self.wg.lista)
+
+    def create_propertys_frame(self):
+        self.frame_prop = ttk.LabelFrame(self.main.frame_inner, text='Propriedades:')
+        i = 1
+
+        for p in self.wg.keys():
+            # cria label : entry
+            ttk.Label(self.frame_prop, text=p).grid(row=i, column=0, sticky=W)
+            entry = ttk.Entry(self.frame_prop)
+            # cria eventos de entry
+            entry.bind('<FocusOut>', lambda event, prop=p: self.set_widget_prop(event, prop))
+            entry.bind('<Return>', lambda event, prop=p: self.set_widget_prop(event, prop))
+            # exibe o valor da propriedade em entry            
+            entry.insert(0, self.wg[p])
+            exec("entry.grid(row=%i, column=1)" % i)
+            i += 1
+
+    def create_error_frame(self):
+        self.frame_erro = ttk.LabelFrame(self, text='Erro:')
+        self.erro = ttk.Label(self.frame_erro, text=' ')
+        self.erro.pack()
+
+        
+        
+
+if __name__=='__main__':
+    Tk().withdraw()
+    inspector = WidgetInspector()
+    print('Widget Inspector ok')
+
+Toolbox.py:
+#!/usr/bin/python
+#-*- coding: utf-8 -*-
+
+from tkinter import *
+from tkinter import ttk
+from Window import *
+from Inspector import *
+from widgets import *
+import sys
+
+
+class WidgetToolbox(Tk):    
+    def __init__(self, window, inspector):
+        super().__init__()
+        self.resizable(True, True)
+        self.geometry("210x350+0+10")
+        self.title('Widget ToolBox')
+        self.window = window
+        self.inspector = inspector
+        self.idx = 0
+        # se fechar a janela
+        self.protocol('WM_DELETE_WINDOW', self.sair)
+
+        mainframe = ttk.Frame(self)
+        
+        # frame top
+        self.frame_top = ttk.LabelFrame(mainframe, text='Actions')
+        self.novo = ttk.Button(self.frame_top, text='novo', width=7, command=self.new_window, state=DISABLED)
+        self.abrir = ttk.Button(self.frame_top, text='abrir', width=7, state=DISABLED)
+        self.salvar = ttk.Button(self.frame_top, text='salvar', width=7, command=self.window.salvar)
+        
+        # frame main
+        self.frame_main = ttk.LabelFrame(mainframe, text='Widgets')        
+        self.toplevel = ttk.Button(self.frame_main, text='Configurar janela', command=lambda: self.inspector.inspect_widget(self.window))        
+        self.frame = ttk.Button(self.frame_main, text='LabelFrame', command=lambda: self.add_widget('WLabelFrame'))
+        self.button = ttk.Button(self.frame_main, text='Button', command=lambda: self.add_widget('WButton'))
+        self.label = ttk.Button(self.frame_main, text='Label', command=lambda: self.add_widget('WLabel'))
+        self.entry = ttk.Button(self.frame_main, text='Entry', command=lambda: self.add_widget('WEntry'))
+        self.text = ttk.Button(self.frame_main, text='Text', command=lambda: self.add_widget('WText'))
+        self.combo = ttk.Button(self.frame_main, text='Combobox', command=lambda: self.add_widget('WCombobox'))
+        self.spinbox = ttk.Button(self.frame_main, text='Spinbox', command=lambda: self.add_widget('WSpinbox'))
+        self.check = ttk.Button(self.frame_main, text='Checkbutton', command=lambda: self.add_widget('WCheckbutton'))
+        self.drop = ttk.Button(self.frame_main, text='OptionMenu', command=lambda: self.add_widget('WOptionMenu'))
+        self.radio = ttk.Button(self.frame_main, text='RadioButton', command=lambda: self.add_widget('WRadiobutton'))
+        self.scale = ttk.Button(self.frame_main, text='Scale', command=lambda: self.add_widget('WScale'))
+        
+        # layout frame top
+        self.frame_top.pack(side=TOP, fill=X)
+        self.novo.pack(side=LEFT)
+        self.abrir.pack(side=LEFT)
+        self.salvar.pack(side=RIGHT)
+
+        # layout frame main
+        self.frame_main.pack(side=BOTTOM, fill=BOTH)
+        self.toplevel.pack(fill=X)
+        self.frame.pack(fill=X)
+        self.button.pack(fill=X)
+        self.label.pack(fill=X)
+        self.entry.pack(fill=X)
+        self.text.pack(fill=X)
+        self.combo.pack(fill=X)
+        self.spinbox.pack(fill=X)
+        self.check.pack(fill=X)
+        self.drop.pack(fill=X)
+        self.radio.pack(fill=X)
+        self.scale.pack(fill=X)
+
+        mainframe.grid(sticky=(N, S, W, E))
+
+        
+    def new_window(self):
+        self.inspector.deiconify()
+        self.window.deiconify()
+        self.inspector.inspect_widget(self.window)
+        # estado dos botões de toolbox
+        self.buttons_on()
+
+    def add_widget(self, tipo):
+        nomeVar = tipo + str(self.idx)
+        nomeVar = nomeVar.lower()
+        
+        # cria o widget
+        if tipo == 'WOptionMenu':
+            exec("%s = WOptionMenu(self.window.mainframe, '%s')" % (nomeVar, nomeVar))
+        else:
+            exec("%s = %s(self.window.mainframe, '%s')" % (nomeVar, tipo, nomeVar))
+
+        # chama inspector com o widget criado
+        exec("self.inspector.inspect_widget(%s)" % nomeVar)
+
+        self.idx += 1
+
+    def buttons_on(self):
+        for b in self.frame_main.children.values():
+            b['state'] = 'normal'
+
+        self.novo['state'] = 'disabled'
+        self.salvar['state'] = 'normal'
+
+    def buttons_off(self):
+        for b in self.frame_main.children.values():
+            b['state'] = 'disabled'
+
+        self.novo['state'] = 'normal'
+        self.salvar['state'] = 'disabled'
+
+    def sair(self):
+        self.inspector.destroy()
+        self.window.destroy()
+        self.destroy()
+        
+
+if __name__=='__main__':
+    Tk().withdraw()
+
+    inspector = WidgetInspector()
+    window = WidgetWindow()
+    toolbox = WidgetToolbox(window, inspector)
+
+    window.set_toolbox(toolbox)
+    inspector.set_toolbox(toolbox)
+
+    inspector.inspect_widget(window)
+
+
+    print('Widget ToolBox ok')
+##    toolbox.mainloop()
+    
+widgets.py:
+from tkinter import *
+from tkinter import ttk
+from Window import *
+from random import randint
+
+
+class WWidget:
+    def __init__(self, nomeVar):
+        self.nomeVar = nomeVar
+                
+        self.props_inicial = {}
+        for k in self.keys():
+            self.props_inicial[k] = self[k]
+           
+    def code(self, props_diff):
+        write = "### %s ###\n" % self.widgetName
+        write += "%s = ttk.%s(%s, **%s)\n" % (self.nomeVar, self.widgetName[5:].capitalize(), self.master.nomeVar, props_diff)
+        write += "%s.place(x=%s, y=%s)\n" % (self.nomeVar, self.winfo_x(), self.winfo_y())
+        write += "#################\n\n"
+        return(write)
+            
+    def drag_n_drop(self, mf):
+        # Drag and drop events
+        self.bind('<Button-1>', mf.drag_start)
+        self.bind('<B1-Motion>', mf.drag_motion)
+        self.bind('<ButtonRelease>', mf.on_release)
+
+        # Resize events
+        self.bind('<Button-1>', mf.resize_start)
+        self.bind('<B1-Motion>', mf.resize_motion)
+
+
+   
+class WLabelFrame(ttk.LabelFrame, WWidget):
+    def __init__(self, mf, nomeVar):
+        ttk.LabelFrame.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self['text'] = 'Frame'
+        self['width'] = 100
+        self['height'] = 50
+        
+    def code(self, props_diff):
+        write = "### %s ###\n" % self.widgetName
+        write += "%s = ttk.LabelFrame(%s, **%s)\n" % (self.nomeVar, self.master.nomeVar, props_diff)
+        write += "%s.place(x=%s, y=%s)\n" % (self.nomeVar, self.winfo_x(), self.winfo_y())
+        write += "#################\n\n"
+        return(write)
+                
+class WCombobox(ttk.Combobox, WWidget):
+    def __init__(self, mf, nomeVar):
+        self.combovar = StringVar()
+        ttk.Combobox.__init__(self, mf, textvariable=self.combovar)
+        self['values'] = ('um','dois','tres','quatro')
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self.state(['disabled'])
+        
+    def code(self, props_diff):
+        print(props_diff)
+        write = "### %s ###\n" % self.widgetName
+        write += "combovar = StringVar()\n"
+        write += """%s = ttk.Combobox(%s, textvariable=combovar, **%s)\n""" % (self.nomeVar, self.master.nomeVar, props_diff)
+        write += """%s['values'] = ('um','dois','tres','quatro')\n""" % self.nomeVar
+        write += "%s.place(x=%s, y=%s)\n" % (self.nomeVar, self.winfo_x(), self.winfo_y())
+        write += "#################\n\n"
+        return(write)
+    
+class WSpinbox(Spinbox, WWidget):
+    def __init__(self, mf, nomeVar):
+        Spinbox.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self['from_'] = 0
+        self['to'] = 100
+
+    def code(self, props_diff):
+        write = "### %s ###\n" % self.widgetName
+        write += "%s = Spinbox(%s, **%s)\n" % (self.nomeVar, self.master.nomeVar, props_diff)
+        write += "%s.place(x=%s, y=%s)\n" % (self.nomeVar, self.winfo_x(), self.winfo_y())
+        write += "#################\n\n"
+        return(write)
+
+
+class WButton(ttk.Button, WWidget):
+    def __init__(self, mf, nomeVar):
+        ttk.Button.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self['text']='btn'
+
+
+class WLabel(ttk.Label, WWidget):
+    def __init__(self, mf, nomeVar):
+        ttk.Label.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self['text'] = 'label'
+
+    
+class WEntry(ttk.Entry, WWidget):
+    def __init__(self, mf, nomeVar):
+        ttk.Entry.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+
+
+class WText(Text, WWidget):
+    def __init__(self, mf, nomeVar):
+        Text.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self['width'] = 10
+        self['height'] = 10
+
+    def code(self, props_diff):
+        write = "### %s ###\n" % self.widgetName
+        write += "%s = Text(%s, **%s)\n" % (self.nomeVar, self.master.nomeVar, props_diff)
+        write += "%s.place(x=%s, y=%s)\n" % (self.nomeVar, self.winfo_x(), self.winfo_y())
+        write += "#################\n\n"
+        return(write)
+    
+
+class WScale(ttk.Scale, WWidget):
+    def __init__(self, mf, nomeVar):
+        ttk.Scale.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self['from_'] = 0
+        self['to'] = 100
+        self['orient'] = 'horizontal'
+        self.state(['disabled'])
+
+
+        
+class WCheckbutton(ttk.Checkbutton, WWidget):
+    def __init__(self, mf, nomeVar):
+        ttk.Checkbutton.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self['text'] = 'check'
+        self.state(['disabled'])
+
+
+class WOptionMenu(ttk.OptionMenu, WWidget):
+    def __init__(self, mf, nomeVar):
+        self.nomeVar = nomeVar
+        self.opc = IntVar()
+        self.lista = [1, 2, 3]
+        self.opc.set(self.lista[0])
+        ttk.OptionMenu.__init__(self, mf, self.opc, *self.lista)
+        WWidget.__init__(self, nomeVar)
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self.state(['disabled'])
+
+    def code(self, props_diff):
+        write = "### OptionMenu ###\n"
+        write += "opc = IntVar()\n"
+        write += "lista = [1,2,3]\n"
+        write += "opc.set(lista[0])\n"
+        write += "%s = ttk.OptionMenu(%s, opc, *lista, **%s)\n" % (self.nomeVar, self.master.nomeVar, props_diff)
+        write += "%s.place(x=%s, y=%s)\n" % (self.nomeVar, self.winfo_x(), self.winfo_y())
+        write += "#################\n\n"
+        return(write)
+
+
+class WRadiobutton(ttk.LabelFrame, WWidget):
+    def __init__(self, mf, nomeVar):
+        ttk.LabelFrame.__init__(self, mf)
+        WWidget.__init__(self, nomeVar)
+
+        self.opc = IntVar()
+        self.dic = {'um':1,
+                    'dois':2,
+                    'tres':3}
+
+        for k, w in self.dic.items():
+            ttk.Radiobutton(self, text=k, value=w).pack(anchor=W)
+
+        self.place(x=randint(20, 330), y=randint(20, 380))
+        self.drag_n_drop(mf)
+        self['text'] = 'RadioButtons'
+
+    def code(self, props_diff):
+        write = "### Radiobutton ###\n"
+        write += "lf = ttk.LabelFrame(%s, text='Radio Buttons')\n" % self.master.nomeVar
+        write += "opc = IntVar()\n"
+        write += "dic = {'um':1, 'dois':2,'tres':3}\n"
+        write += "for k, w in dic.items():\n"
+        write += "    ttk.Radiobutton(lf, text=k, variable=opc, value=w).pack(anchor=W)\n"
+        write += "lf.place(x=%s, y=%s)\n" % (self.winfo_x(), self.winfo_y())
+        write += "#################\n\n"
+        return(write)
+    
+
+if __name__=='__main__':
+    top = Tk()
+    
+    f = ScrollerLabelFrame(top)
+
+    for i in range(30):
+        Button(f.frame_inner, text='foo').pack()
+
+    
+
+
+Window.py:
+#!/usr/bin/python
+#-*- coding: utf-8 -*-
+
+from tkinter import *
+from tkinter import ttk
+from Inspector import *
+from widgets import *
+from tkinter.filedialog import asksaveasfilename
+import sys
+
+
+class DragFrame(ttk.Frame):
+    def __init__(self, master):
+        ttk.Frame.__init__(self, master)
+        self.nomeVar = 'mainframe'
+        self.resizing = False
+
+    def drag_start(self, event):
+        wg = event.widget
+        wg.startX = event.x
+        wg.startY = event.y
+
+        if event.state & 0x0004:  # Check if Control key is pressed
+            self.resizing = True
+        else:
+            self.resizing = False
+
+        
+    def drag_motion(self, event):
+        wg = event.widget
+
+        if self.resizing:
+            delta_x = event.x - wg.startX
+            delta_y = event.y - wg.startY
+
+            new_width = wg.winfo_width() + delta_x
+            new_height = wg.winfo_height() + delta_y
+
+            if new_width > 0 and new_height > 0:
+                wg.configure(width=new_width, height=new_height)
+        else:
+            x = wg.winfo_x() - wg.startX + event.x
+            y = wg.winfo_y() - wg.startY + event.y
+            wg.place(x=x, y=y)
+
+    def on_release(self, event):
+        self.resizing = False
+        self.master.toolbox.inspector.inspect_widget(event.widget)
+
+
+
+class WidgetWindow(Toplevel):
+    def __init__(self, nomeVar='WindowDesigner'):
+        super().__init__()
+        self.geometry('450x550+230+20')
+        self.title(nomeVar)
+        self.filename = ''
+        self.nomeVar = nomeVar
+
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+        self.mainframe = DragFrame(self)
+        self.mainframe.grid(sticky=(N, S, W, E))
+
+        # pega as propriedades iniciais de window
+        self.mainframe.props_inicial = {}
+        for k in self.mainframe.keys():
+            self.mainframe.props_inicial[k] = self.mainframe[k]
+
+        # se fechar a janela abre dialogo de salvar arquivo
+        self.protocol('WM_DELETE_WINDOW', self.close)
+
+    def set_toolbox(self, toolbox):
+        self.toolbox = toolbox
+
+    def close(self):
+        self.salvar()
+        self.toolbox.inspector.withdraw()
+        self.withdraw()
+
+        for widget in self.mainframe.winfo_children():
+            widget.destroy()
+
+        self.toolbox.novo['state'] = 'normal'
+        self.toolbox.salvar['state'] = 'disabled'
+        self.toolbox.buttons_off()
+        
+    def salvar(self):        
+        code = """#!/usr/bin/python
+#-*- coding: utf-8 -*-
+
+from tkinter import *
+from tkinter import ttk
+"""
+
+        code += """
+%s = Tk()
+%s.geometry('%s')
+""" % (self.nomeVar, self.nomeVar, self.winfo_geometry())
+        
+        code += """
+mainframe = ttk.Frame(%s)
+mainframe.grid(row=0, column=0, sticky=(N,S,E,W))
+%s.columnconfigure(0, weight=1)
+%s.rowconfigure(0, weight=1)
+
+""" % (self.nomeVar, self.nomeVar, self.nomeVar)
+        
+        code += self._parser_widget()
+        code += "\n\n%s.mainloop()" % self.nomeVar
+        
+##        print(code)
+
+        # message file dialog
+        if self.filename:
+            with open(self.filename,'w') as arq:
+                arq.write(code)
+        else:
+            fn = asksaveasfilename(initialfile='app.py', defaultextension='*.py', filetypes=[('arquivos .py','*.py'),('todos arquivos','*.*')])
+            with open(fn,'w') as arq:
+                arq.write(code)
+
+            self.title(fn)
+            self.filename = fn
+
+    def _parser_widget(self):
+        wg_code = ''
+        # pega todos os widgets dentro de window
+        for wg in self.mainframe.children.values():
+            props_atual = {}
+            props_diff = {}
+            
+            # pega as propriedades atuais do widget
+            for k in wg.keys():
+                props_atual[k] = wg[k]
+
+            # compara as propriedades iniciais e atuais do widget
+            for p in props_atual.keys():
+                if props_atual[p] != wg.props_inicial[p]:
+                    props_diff[p] = props_atual[p]
+
+            wg_code += wg.code(props_diff)
+            
+        return(wg_code)
+
+        
+if __name__=='__main__':
+    Tk().withdraw()
+    top = WidgetWindow()
+    print('Widget Window ok')
+##    top.mainloop()
+
+    
