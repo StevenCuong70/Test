@@ -1,0 +1,47 @@
+from anycaptcha import AnycaptchaClient,FunCaptchaProxylessTask
+
+with open('Anycaptcha.txt') as f:
+        Api = f.read().strip()
+
+def funcaptcha():
+    website_url = "https://signup.live.com/signup"
+    site_key = "B7D8911C-5CC8-A9A3-35B0-554ACEE604DA"
+    api_key = Api
+
+    client = AnycaptchaClient(api_key)
+    task = FunCaptchaProxylessTask(website_url, site_key)
+
+    job = client.createTask(task,typecaptcha="funcaptcha")
+    job.join()
+    result = job.get_solution_response()
+    if result.find("ERROR") != -1:
+        print("error ", result)
+    else:
+        print("success ", result)
+        return result
+     #######################################################   
+     
+def method_2(driver):
+    while driver.execute_script("return document.readyState") != "complete":
+        method_5(0.5)
+
+def method_5(double_0):
+    time.sleep(int(double_0 * 1000.0) / 1000)
+
+##############################################################
+driver.implicitly_wait(30)
+time.sleep(random.randint(7, 9))
+'''
+token = funcaptcha()
+driver.switch_to.frame(0)
+driver.execute_script(f'parent.postMessage(JSON.stringify({{"eventId": "challenge-complete", "payload": {{"sessionToken": "{token}"}}}}), "*")')
+method_2(driver)
+'''
+token = funcaptcha()
+driver.switch_to.frame(0)
+payload = {"eventId": "challenge-complete", "payload": {"sessionToken": token}}
+driver.execute_script(f'parent.postMessage(JSON.stringify({payload}), "*")')
+WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
+driver.implicitly_wait(25)
+time.sleep(random.randint(3, 5))
